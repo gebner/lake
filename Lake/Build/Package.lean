@@ -88,14 +88,14 @@ def Package.build (self : Package) : BuildM PUnit := do
 
 -- # Build Specific Modules of the Package
 
-def Package.moduleOleanTarget (mod : Name) (self : Package) : FileTarget :=
-  BuildTarget.mk' (self.modToOlean mod) do
+def Package.moduleOleanTarget (mod : Name) (self : Package) : OleanTarget :=
+  BuildTarget.mk' {pkg := self, name := mod : Module} do
     let depTarget ← self.buildExtraDepsTarget
     let build := recBuildModuleOleanTargetWithLocalImports depTarget
     return (← buildModule ⟨self, mod⟩ build).task
 
 def Package.moduleOleanAndCTarget (mod : Name) (self : Package) : OleanAndCTarget :=
-  BuildTarget.mk' ⟨self.modToOlean mod, self.modToC mod⟩ do
+  BuildTarget.mk' {pkg := self, name := mod : Module} do
     let depTarget ← self.buildExtraDepsTarget
     let build := recBuildModuleOleanAndCTargetWithLocalImports depTarget
     return (← buildModule ⟨self, mod⟩ build).task

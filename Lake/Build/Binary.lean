@@ -16,7 +16,7 @@ namespace Lake
 def Package.oFileTargetOf
 (mod : Name) (target : ActiveOleanAndCTarget) (self : Package) : FileTarget :=
   let oFile := self.modToO mod
-  let cTarget := Target.active <| ActiveOleanAndCTarget.cTarget target
+  let cTarget := Target.active <| ActiveOleanAndCTarget.cFileTarget target
   leanOFileTarget oFile cTarget self.moreLeancArgs
 
 def Package.oFileTargetsOf
@@ -26,7 +26,7 @@ def Package.oFileTargetsOf
 
 def Package.moduleOTarget (mod : Name) (self : Package) : FileTarget :=
   let oFile := self.modToO mod
-  let cTarget := self.moduleOleanAndCTarget mod |>.cTarget
+  let cTarget := self.moduleOleanAndCTarget mod |>.cFileTarget
   leanOFileTarget oFile cTarget self.moreLeancArgs
 
 -- # Build Package Static Lib
