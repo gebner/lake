@@ -15,10 +15,16 @@ structure Module where
   name : Name
   /--
   The name of the module as a key.
+  While two different modules can share the same name in a build
+  (e.g., `Main` modules for executables of different packages),
+  key names are unique.
   Used to create private modules (e.g., executable roots).
   -/
   keyName : Name := name
   deriving Inhabited
+
+instance : Hashable Module where hash m := hash m.keyName
+instance : BEq Module where beq m n := m.keyName == n.keyName
 
 abbrev ModuleSet := RBTree Module (·.name.quickCmp ·.name)
 @[inline] def ModuleSet.empty : ModuleSet := RBTree.empty
