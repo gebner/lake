@@ -160,6 +160,51 @@ def Module.recBuildLeanO (self : Module) : IndexBuildM (BuildJob FilePath) := do
 def Module.oFacetConfig : ModuleFacetConfig oFacet :=
   mkFacetJobConfig Module.recBuildLeanO
 
+instance : Nonempty Lean.Parser.ParserContext :=
+  Nonempty.intro {
+    input := default, fileName := default, fileMap := default
+    env := default, options := default, prec := default, tokens := default
+  }
+
+open Lean Parser in
+initialize parserContextForImport : ParserContext ←
+  -- Only do this if you know what you are doing.
+  -- We are initializing an environment during initializion.
+  -- This means it will only support the environment extensions
+  -- and builtin syntax before this module.
+  -- (which is perfectly okay for an import parser, all we need is a
+  -- token table containing "import" as a keyword...)
+  let exts ← EnvExtensionInterfaceImp.mkInitialExtStates
+  let env := {
+    const2ModIdx    := {}
+    constants       := {}
+    header          := { trustLevel := 1024 }
+    extraConstNames := {}
+    extensions      := exts
+  }
+  return mkParserContext (mkInputContext "" "") { env, options := {} }
+
+set_option trace.compiler.ir.result true in
+open Lean.Parser in
+def fastModuleHeaderFn : ParserFn :=
+  inline nodeFn ``Module.header <|
+  inline andthenFn (inline optionalFn (inline nodeFn ``Module.prelude <| symbolFn "prelude")) <| manyFn <|
+    inline nodeFn ``Module.import <|
+    inline andthenFn (symbolFn "import") <| inline andthenFn (inline optionalFn (symbolFn "runtime")) identFn
+
+-- set_option trace.compiler.ir.result true in
+open Lean Parser Elab in
+def parseImports (input : String) (fileName : String) : IO (List Import) := do
+  let inputCtx := mkInputContext input fileName
+  let ctx := { parserContextForImport with toInputContext := inputCtx }
+  let ctx := Module.updateTokens ctx
+  let s   := mkParserState ctx.input
+  let s   := whitespace ctx s
+  -- let s   := Parser.Module.header.fn ctx s
+  let s   := fastModuleHeaderFn ctx s
+  let stx := s.stxStack.back
+  return headerToImports stx
+
 /--
 Recursively parse the Lean files of a module and its imports
 building an `Array` product of its direct local imports.
@@ -169,7 +214,7 @@ def Module.recParseImports (mod : Module)
   let mut directImports := #[]
   let mut importSet : Lean.HashSet Module := ∅
   let contents ← IO.FS.readFile mod.leanFile
-  let (imports, _, _) ← Lean.Elab.parseImports contents mod.leanFile.toString
+  let imports ← parseImports contents mod.leanFile.toString
   for imp in imports do
     if let some mod ← findModule? imp.module then
       unless importSet.contains mod do
