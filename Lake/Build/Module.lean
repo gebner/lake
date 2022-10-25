@@ -12,7 +12,7 @@ namespace Lake
 
 def Module.buildUnlessUpToDate (mod : Module)
 (dynlibPath : SearchPath) (dynlibs : Array FilePath)
-(depTrace : BuildTrace) (leanOnly : Bool) : BuildM BuildTrace := do
+(depTrace : BuildTrace) : BuildM BuildTrace := do
   let isOldMode ← getIsOldMode
   let argTrace : BuildTrace := pureHash mod.leanArgs
   let srcTrace : BuildTrace ← computeTrace mod.leanFile
@@ -23,21 +23,9 @@ def Module.buildUnlessUpToDate (mod : Module)
     else
       modTrace.checkAgainstFile mod mod.traceFile
   let name := mod.name.toString
-  if leanOnly then
-    unless modUpToDate do
-      compileLeanModule name mod.leanFile mod.oleanFile mod.ileanFile none
-        (← getLeanPath) mod.rootDir dynlibs dynlibPath mod.leanArgs (← getLean)
-  else
-    let cUpToDate ←
-      if isOldMode then
-        pure modUpToDate
-      else
-        (modUpToDate && ·) <$> modTrace.checkAgainstFile mod.cFile mod.cTraceFile
-    unless cUpToDate do
-      compileLeanModule name mod.leanFile mod.oleanFile mod.ileanFile mod.cFile
-        (← getLeanPath) mod.rootDir dynlibs dynlibPath mod.leanArgs (← getLean)
-    unless isOldMode do
-      modTrace.writeToFile mod.cTraceFile
+  unless modUpToDate do
+    compileLeanModule name mod.leanFile mod.oleanFile mod.ileanFile mod.cFile
+      (← getLeanPath) mod.rootDir dynlibs dynlibPath mod.leanArgs (← getLean)
   unless isOldMode do
     modTrace.writeToFile mod.traceFile
   return mixTrace (← computeTrace mod) depTrace
@@ -86,8 +74,6 @@ artifact.
 -/
 def Module.recBuildLean (mod : Module) (art : LeanArtifact)
 : IndexBuildM (BuildJob (if art = .leanBin then Unit else FilePath)) := do
-  let leanOnly := mod.isLeanOnly ∧ art ≠ .c
-
   -- Compute and build dependencies
   let imports ← mod.imports.fetch
   let extraDepJob ← mod.pkg.extraDep.fetch
@@ -109,7 +95,7 @@ def Module.recBuildLean (mod : Module) (art : LeanArtifact)
       let dynlibs :=
         externDynlibs.map (.mk <| nameToSharedLib ·.2) ++
         modDynlibs.map (.mk <| nameToSharedLib ·)
-      let trace ← mod.buildUnlessUpToDate dynlibPath dynlibs depTrace leanOnly
+      let trace ← mod.buildUnlessUpToDate dynlibPath dynlibs depTrace
       return ((), trace)
 
   -- Save All Resulting Jobs & Return Requested One
@@ -120,21 +106,14 @@ def Module.recBuildLean (mod : Module) (art : LeanArtifact)
   let ileanJob ← modJob.bindSync fun _ depTrace =>
     return (mod.ileanFile, mixTrace (← computeTrace mod.ileanFile) depTrace)
   store mod.ilean.key <| ileanJob
-  if h : leanOnly then
-    have : art ≠ .c := h.2
-    return match art with
-    | .leanBin => modJob
-    | .olean => oleanJob
-    | .ilean => ileanJob
-  else
-    let cJob ← modJob.bindSync fun _  _ =>
-      return (mod.cFile, mixTrace (← computeTrace mod.cFile) (← getLeanTrace))
-    store mod.c.key cJob
-    return match art with
-    | .leanBin => modJob
-    | .olean => oleanJob
-    | .ilean => ileanJob
-    | .c => cJob
+  let cJob ← modJob.bindSync fun _  _ =>
+    return (mod.cFile, mixTrace (← computeTrace mod.cFile) (← getLeanTrace))
+  store mod.c.key cJob
+  return match art with
+  | .leanBin => modJob
+  | .olean => oleanJob
+  | .ilean => ileanJob
+  | .c => cJob
 
 /-- The `ModuleFacetConfig` for the builtin `leanBinFacet`. -/
 def Module.leanBinFacetConfig : ModuleFacetConfig leanBinFacet :=

@@ -91,16 +91,6 @@ structure PackageConfig extends WorkspaceConfig, LeanConfig where
   precompileModules : Bool := false
 
   /--
-  Whether the package is "Lean-only". A Lean-only package does not produce
-  native files for modules (e.g. `.c`, `.o`).
-
-  Defaults to `false`. Setting `precompileModules` to `true` will override this
-  setting and produce native files anyway (as they are needed to build module
-  dynlibs).
-  -/
-  isLeanOnly : Bool := false
-
-  /--
   Additional arguments to pass to the Lean language server
   (i.e., `lean --server`) launched by `lake server`.
   -/
@@ -269,10 +259,6 @@ def release? (self : Package) : Option (String × String) := do
 /-- The package's `precompileModules` configuration. -/
 @[inline] def precompileModules (self : Package) : Bool :=
   self.config.precompileModules
-
-/-- The package's `isLeanOnly` configuration. -/
-@[inline] def isLeanOnly (self : Package) : Bool :=
-  self.config.isLeanOnly
 
 /-- The package's `moreServerArgs` configuration. -/
 @[inline] def moreServerArgs (self : Package) : Array String :=
